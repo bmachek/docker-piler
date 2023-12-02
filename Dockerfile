@@ -1,6 +1,8 @@
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
-LABEL maintainer="ebtcorg"
+LABEL maintainer="bmachek"
+
+
 
 # environment settings
 ARG DEBIAN_FRONTEND="noninteractive"
@@ -9,7 +11,8 @@ ENV MYSQL_HOSTNAME="localhost" \
     MYSQL_PASSWORD="piler123" \
     MYSQL_USER="piler" \
     MYSQL_ROOT_PASSWORD="abcde123" \
-    PACKAGE="${PACKAGE:-piler-1.3.8.tar.gz}"
+    PILER_VERSION="1.4.4" \
+    PACKAGE="${PACKAGE:-piler-1.4.4.tar.gz}" 
 
 # must be set in two steps, as in in one the env is still emty
 ENV PUID_NAME="${PUID_NAME:-piler}"
@@ -27,11 +30,12 @@ RUN \
  echo "**** install packages ****" && \
  apt-get update && \
  apt-get install -y \
- nvi wget curl rsyslog openssl sysstat php7.4-cli php7.4-cgi php7.4-mysql php7.4-fpm php7.4-zip php7.4-ldap \
- php7.4-gd php7.4-curl php7.4-xml catdoc unrtf poppler-utils nginx tnef sudo libodbc1 libpq5 libzip5 \
+ nvi wget curl rsyslog openssl sysstat php8.1-cli php8.1-cgi php8.1-mysql php8.1-fpm php8.1-zip php8.1-ldap \
+ php8.1-gd php8.1-curl php8.1-xml catdoc unrtf poppler-utils nginx tnef sudo libodbc1 libpq5 libzip4 \
  libtre5 libwrap0 cron libmariadb3 python3 python3-mysqldb php-memcached memcached mariadb-client gpgv1 gpgv2 \
  sphinxsearch libmariadb-dev build-essential \
- libcurl4-openssl-dev php7.4-dev libwrap0-dev libtre-dev libzip-dev libc6 libc6-dev
+ libcurl4-openssl-dev php8.1-dev libwrap0-dev libtre-dev libzip-dev libc6 libc6-dev
+
 
 # need on ubuntu / debian etc
 RUN \
@@ -39,37 +43,31 @@ RUN \
  printf "Defaults\\072\\045www-data \\041requiretty\\n" >> /etc/sudoers.d/81-www-data-sudo-rc-piler-reload && \
  chmod 0440 /etc/sudoers.d/81-www-data-sudo-rc-piler-reload
 
-# need on Centos / Redhat etc
 RUN \
- printf "apache ALL=(root:root) NOPASSWD: /etc/init.d/rc.piler reload\n" > /etc/sudoers.d/82-apache-sudo-rc-piler-reload && \
- printf "Defaults\\072\\045apache \\041requiretty\\n" >> /etc/sudoers.d/82-apache-sudo-rc-piler-reload && \
- chmod 0440 /etc/sudoers.d/82-apache-sudo-rc-piler-reload
-
-RUN \
+    mkdir -p /etc/piler && \
     sed -i 's/^/###/' /etc/init.d/sphinxsearch && \
     echo "### piler install, comment full file to stop the OS reindex" >> /etc/init.d/sphinxsearch && \
     sed -i 's/mail.[iwe].*//' /etc/rsyslog.conf && \
     sed -i '/session    required     pam_loginuid.so/c\#session    required     pam_loginuid.so' /etc/pam.d/cron && \
-    mkdir /etc/piler && \
+    # mkdir /etc/piler && \
     printf "[mysql]\nuser = ${MYSQL_USER}\npassword = ${MYSQL_PASSWORD}\n" > /etc/piler/.my.cnf && \
     printf "[mysql]\nuser = root\npassword = ${MYSQL_ROOT_PASSWORD}\n" > /root/.my.cnf && \
     echo "alias mysql='mysql --defaults-file=/etc/piler/.my.cnf'" > /root/.bashrc && \
     echo "alias t='tail -f /var/log/syslog'" >> /root/.bashrc
-
-RUN wget "https://bitbucket.org/jsuto/piler/downloads/${PACKAGE}" -O "/${PACKAGE}"
-
-RUN echo "**** install piler package via source tgz ****"  && \
-    tar --directory=${BUILD_DIR} --restrict --strip-components=1 -zxvf ${PACKAGE} && \
-    rm -f ${PACKAGE}
 
 RUN groupadd --gid $PGID piler
 RUN useradd --uid $PUID -g piler -d /var/piler -s /bin/bash piler
 RUN usermod -L piler
 RUN mkdir /var/piler && chmod 755 /var/piler
 
-RUN echo "**** patch piler source ****"
-COPY 101-piler-1-3-7-sphinxsearch-310-220-compatily-php-if-fix.patch ${BUILD_DIR}
-RUN cd ${BUILD_DIR} && patch -p1 < ${BUILD_DIR}/101-piler-1-3-7-sphinxsearch-310-220-compatily-php-if-fix.patch
+RUN \
+ echo "**** download tarball ****" && \
+ wget "https://bitbucket.org/jsuto/piler/downloads/${PACKAGE}" -O "/${PACKAGE}"
+
+RUN echo "**** install piler package via source tgz ****"  && \
+ tar --directory=${BUILD_DIR} --restrict --strip-components=1 -zxvf ${PACKAGE} && \
+ rm -f ${PACKAGE}
+
 
 RUN echo "**** build piler package from source ****"  && \
     cd ${BUILD_DIR} && \
@@ -88,8 +86,8 @@ RUN echo "**** continue with the setup ****" && \
     apt-get clean
 
 COPY start.sh /start.sh
-COPY piler_1.3.8-postinst /piler-postinst
-COPY piler_1.3.8-etc_piler-nginx.conf.dist-mod-php7.4 /piler-nginx.conf.dist
+COPY piler_${PILER_VERSION}-postinst /piler-postinst
+COPY piler_${PILER_VERSION}-etc_piler-nginx.conf.dist /piler-nginx.conf.dist
 
 EXPOSE 25 80
 

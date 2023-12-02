@@ -39,6 +39,8 @@ pre_seed_sphinx() {
        -e "s%MYSQL_PASSWORD%${MYSQL_PASSWORD}%" \
        -e "s%@LOCALSTATEDIR@%/var%" \
        -e "s%type = mysql%type = mysql%" \
+       -e "s%331%221%" \
+       -e "s%thread_pool%threads%" \
        "/etc/piler/sphinx.conf.dist" > "/etc/piler/sphinx.conf"
 
    echo "Done."
@@ -60,6 +62,7 @@ fix_configs() {
       sed -i "s%tls_enable=.*%tls_enable=1%" "/etc/piler/piler.conf"
       sed -i "s%mysqlsocket=.*%mysqlsocket=\nmysqlhost=${MYSQL_HOSTNAME}\nmysqlport=3306%" "/etc/piler/piler.conf"
       sed -i "s%mysqlpwd=.*%mysqlpwd=${MYSQL_PASSWORD}%" "/etc/piler/piler.conf"
+      grep mysql /etc/piler/piler.conf
    fi
 
    if [[ ! -f "$piler_nginx_conf" ]]; then
@@ -93,7 +96,7 @@ create_dir_if_not_exist /var/piler/www/images
 echo "run postinst\n"
 /bin/bash /piler-postinst
 
-service rsyslog start
+#service rsyslog start
 
 echo "waiting for mysql"
 while ! mysqladmin ping -h"$MYSQL_HOSTNAME" --silent; do
@@ -113,11 +116,14 @@ pre_seed_sphinx
 fix_configs
 
 service cron start
-echo "starting php7.4-fpm"
-service php7.4-fpm start
-service php7.4-fpm status || true
-service nginx start
+echo "starting php8,1-fpm"
+/etc/init.d/php8.1-fpm start
+echo "starting nginx"
+/etc/init.d/nginx start
+echo "starting rc.searchd"
 /etc/init.d/rc.searchd start
+
+
 
 # fix for overlay, https://github.com/phusion/baseimage-docker/issues/198
 touch /var/spool/cron/crontabs/piler
